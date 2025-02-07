@@ -1,66 +1,57 @@
 export default async function handler(req, res) {
+  // Validate token
   if (!process.env.HUGGING_FACE_TOKEN) {
-    return res.status(500).json({ error: "Token not configured" });
+    return res.status(500).json({ error: "Hugging Face token not configured" });
   }
 
+  // Validate method
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const maxRetries = 3;
-  let currentTry = 0;
-
-  async function attemptGeneration() {
+  try {
     const { prompt } = req.body;
-    console.log(`Attempt ${currentTry + 1} with prompt:`, prompt);
+    console.log("Starting generation with prompt:", prompt);
 
+    // First check if model is ready
+    const statusResponse = await fetch(
+      "https://api-inference.huggingface.co/models/facebook/musicgen-small",
+      {
+        method: "HEAD",
+        headers: {
+          Authorization: `Bearer ${process.env.HUGGING_FACE_TOKEN}`,
+        },
+      }
+    );
+
+    if (statusResponse.status === 503) {
+      return res.status(503).json({ 
+        error: "Model is loading, please try again in a few seconds" 
+      });
+    }
+
+    // Make the actual generation request
     const response = await fetch(
       "https://api-inference.huggingface.co/models/facebook/musicgen-small",
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.HUGGING_FACE_TOKEN}`,
+          Authorization: `Bearer ${process.env.HUGGING_FACE_TOKEN}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           inputs: prompt,
           parameters: {
-            wait_for_model: true,
-            max_new_tokens: 250
+            wait_for_model: true
           }
         }),
       }
     );
 
-    if (response.status === 503) {
-      const errorText = await response.text();
-      console.log("Model loading, waiting to retry...");
-      // Wait for 5 seconds before retrying
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      throw new Error("Model is loading");
-    }
-
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("API Error:", errorText);
       throw new Error(`API call failed: ${response.status}`);
-    }
-
-    return response;
-  }
-
-  try {
-    let response;
-    while (currentTry < maxRetries) {
-      try {
-        response = await attemptGeneration();
-        break; // If successful, break the loop
-      } catch (error) {
-        currentTry++;
-        if (currentTry === maxRetries) {
-          throw error; // If all retries failed, throw the error
-        }
-        // If it's not the last try, continue the loop
-        console.log(`Retry ${currentTry}/${maxRetries}`);
-      }
     }
 
     const audioBuffer = await response.arrayBuffer();
@@ -70,10 +61,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ music: audioUrl });
 
   } catch (error) {
-    console.error("Final error:", error);
+    console.error("Generation error:", error);
     return res.status(500).json({ 
-      error: error.message,
-      details: "Please try again in a few seconds"
+      error: "Music generation failed",
+      message: error.message
     });
   }
 }
