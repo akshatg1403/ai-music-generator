@@ -21,15 +21,19 @@ export default function Home() {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to generate music");
+      if (response.status === 503) {
+        throw new Error("Model is loading, please try again in a few seconds");
       }
 
-      if (data.music) {
-        setMusic(data.music);
-      } else {
-        throw new Error("No music received");
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to generate music");
       }
+
+      if (!data.music) {
+        throw new Error("No music generated");
+      }
+
+      setMusic(data.music);
     } catch (error) {
       console.error("Error:", error);
       setError(error.message);
@@ -54,12 +58,24 @@ export default function Home() {
           disabled={isLoading || !prompt}
           className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400"
         >
-          {isLoading ? "Generating... Please wait" : "Generate Music"}
+          {isLoading ? (
+            <span>Loading Model... Please Wait</span>
+          ) : (
+            "Generate Music"
+          )}
         </button>
 
         {error && (
           <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
             {error}
+            {error.includes("loading") && (
+              <button 
+                onClick={generateMusic}
+                className="ml-2 text-blue-500 hover:text-blue-700"
+              >
+                Try Again
+              </button>
+            )}
           </div>
         )}
 
