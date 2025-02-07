@@ -2,28 +2,33 @@ import Replicate from "replicate";
 
 export default async function handler(req, res) {
   if (req.method === "POST") {
-    const replicate = new Replicate({
-      auth: process.env.REPLICATE_API_TOKEN,
-    });
-    const { prompt } = req.body;
-
     try {
+      const replicate = new Replicate({
+        auth: process.env.REPLICATE_API_TOKEN,
+      });
+
+      const { prompt } = req.body;
+      
+      console.log("Starting generation with prompt:", prompt);
+
       const output = await replicate.run(
-        "riffusion/riffusion:8cf61ea6c56afd61d8f5b9ffd14d7c216c0a93844ce2d82ac1c9ecc9c7f24e05",
+        "meta/musicgen:7be0f12c54a8d033a0fbd14418c9af98962da9a86f5ff7811f9b3423a1f0b7d7",
         {
           input: {
-            prompt_a: prompt
-          },
+            prompt: prompt,
+            duration: 8,
+            model_version: "melody",
+            output_format: "wav"
+          }
         }
       );
-      
-      console.log("AI music generation output:", output);
 
-      // Send the audio_out URL from the response
-      res.status(200).json({ music: output.audio_out });
+      console.log("Generation output:", output);
+
+      res.status(200).json({ music: output });
     } catch (error) {
-      console.error("AI music generation failed:", error);
-      res.status(500).json({ error: "AI music generation failed" });
+      console.error("Error details:", error);
+      res.status(500).json({ error: error.message });
     }
   } else {
     res.status(405).json({ error: "Method not allowed" });
